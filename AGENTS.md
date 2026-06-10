@@ -59,10 +59,23 @@ deliberately all-MIT/OSS.
 
 ## Commands
 
-No build/test scripts exist yet. Once the monorepo is scaffolded, the expected workflow is
-pnpm + Turborepo (`pnpm install`, `pnpm dev`, `pnpm build`, `pnpm test`, `pnpm lint`, with Jest
-for backend tests). **When you add scaffolding, update this section with the real, verified
-commands** — including how to run a single test and how to run/create TypeORM migrations.
+| Command | Description |
+|---|---|
+| `pnpm install` | Install all workspace dependencies |
+| `pnpm build` | Build all packages (Turborepo) |
+| `pnpm dev` | Run all packages in dev mode (Turborepo) |
+| `pnpm test` | Run all tests (Turborepo) |
+| `pnpm lint` | Run all linters (Turborepo) |
+| `pnpm --filter @openerp-x/api test` | Run API unit tests only |
+| `pnpm --filter @openerp-x/api test:e2e` | Run API e2e tests |
+| `pnpm --filter @openerp-x/api test -- --testPathPattern=app.controller` | Run a single test file |
+| `pnpm --filter @openerp-x/shared build` | Build shared package only |
+| `docker compose up` | Start PostgreSQL 17 + Valkey + Mailpit |
+
+**TypeORM migrations** (added when TypeORM is introduced in Phase 0.1):
+- `pnpm --filter @openerp-x/api typeorm migration:create src/migrations/MigrationName`
+- `pnpm --filter @openerp-x/api typeorm migration:run`
+- `pnpm --filter @openerp-x/api typeorm migration:revert`
 
 ## Architecture: invariants that must never be broken
 

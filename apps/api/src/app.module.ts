@@ -8,6 +8,7 @@ import { validateEnv } from './config/env.schema';
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
+      ignoreEnvFile: process.env.NODE_ENV === 'test',
     }),
   ],
   controllers: [AppController],
