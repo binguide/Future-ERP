@@ -123,6 +123,23 @@ and a **Saudi e-invoicing (ZATCA)** phase is added, making **9 phases (0–8)**.
 - **T0.17 — Guard + row-level filter.** Depends: T0.16. Guard on CRUD + (company/branch/warehouse) filter on lists. Acceptance: a user cannot see outside their scope.
 - **T0.18 — Row-level filter test.** Depends: T0.17. Acceptance: a test proves rows outside the user's scope are hidden.
 
+#### 0.4-fix RBAC review remediation (from code review of T0.15–T0.18)
+- **T0.18a — Explicit user↔role association.** Depends: T0.18. `CaslGuard` resolves abilities from the
+  `User.role` **enum** but permissions hang off `Role` rows looked up by name, so authorization only works
+  when the two happen to coincide (and a user with no matching `Role` row is silently 403'd on every
+  request). Add a real association (a `user_roles` join table, preferred, or a `role_id` FK on `users`) with
+  matching tenant DDL, and have `AbilityFactory`/`CaslGuard` build the ability from the user's assigned
+  `Role`(s). Acceptance: a user with an assigned role gets that role's permissions without relying on the
+  enum string; multiple roles union their permissions.
+- **T0.18b — `user_permissions` uniqueness on null scopes.** Depends: T0.18. `UNIQUE(user_id, doctype_id,
+  company_id, branch_id, warehouse_id)` does not dedup unscoped rows because Postgres treats NULLs as
+  distinct. Use PG17 `UNIQUE NULLS NOT DISTINCT` in the DDL, and make `setUserPermission` an upsert.
+  Acceptance: setting the same unscoped user permission twice yields one row.
+- **T0.18c — Drop the hand-written CASL type stub.** Depends: T0.18. `apps/api/src/@types/casl-ability.d.ts`
+  shadows the real `@casl/ability` v7 types because `tsconfig moduleResolution` is `node`. Switch the API
+  tsconfig to `bundler` (keep the CommonJS build working), delete the stub, and adapt `ability.factory.ts`
+  to the real CASL API. Acceptance: stub deleted; typecheck + full e2e green.
+
 #### 0.5 General Ledger core (the heart)
 - **T0.19 — Accounting setup entities.** Depends: T0.14. `Company` (base currency + default valuation +
   allow-negative), `Branch`, `Currency`, `ExchangeRate`, `FiscalYear`, `CostCenter`, `Account` (tree per company). Acceptance: migrations + basic creation.
@@ -133,9 +150,39 @@ and a **Saudi e-invoicing (ZATCA)** phase is added, making **9 phases (0–8)**.
   multi-currency balances in base; atomic rollback on any failed line; posting in a closed period rejected.
 - 🚦 **Gate 0.5**: no path other than `PostingService` writes to `GLEntry`.
 
+#### 0.5-fix Posting review remediation (from code review of T0.21/T0.22)
+> These harden `PostingService` (`apps/api/src/accounting/posting.service.ts`). The core mechanics
+> (atomic transaction, base-currency balance gate, tenant isolation) are correct and already tested —
+> each task below adds a guard plus a failing-then-passing test. Do them in order (they edit the same
+> `post()` method). Keep all reads on the transaction's `queryRunner.manager` (never `@InjectRepository`).
+- **T0.22a — Enforce exchange rate for non-base currency.** Depends: T0.22. Today a line with a foreign
+  `currency` but no `exchangeRate` defaults to rate `1` (silent 1:1 misstatement). Look the rate up from
+  `exchange_rates` (most recent `valid_from ≤ postingDate`, by currency) and throw if none exists; only
+  default to `1` when the line currency equals `company.baseCurrency`. Acceptance: a foreign-currency line
+  with no rate and no matching `ExchangeRate` row is rejected; with a matching row, `base_*` uses it.
+- **T0.22b — Require an open fiscal period.** Depends: T0.22. Today posting to a date with **no** `FiscalYear`
+  is allowed (only an explicitly `is_closed` period is blocked). Require that an open period covering
+  `postingDate` exists. Acceptance: posting to a date with no fiscal year is rejected; closed-period
+  rejection still passes.
+- **T0.22c — Reject posting to group accounts.** Depends: T0.22. Only leaf accounts are postable. Reject any
+  line whose `Account.isGroup = true`. Acceptance: posting to a group/header account is rejected.
+- **T0.22d — Verify account belongs to the company.** Depends: T0.22. The existence check counts by id only,
+  so a company-B entry can reference a company-A account in the same tenant. Load the accounts and assert
+  `account.companyId === input.companyId` (fold into the same load as T0.22c). Acceptance: posting against
+  another company's account is rejected.
+- **T0.22e — Exact money math (integer cents).** Depends: T0.22. Replace the float base-amount math and the
+  strict-`!==` balance gate with integer-cent arithmetic so the balance check is exact. Acceptance: an entry
+  with a fractional rate (e.g. `1.005`) over several lines balances exactly; persisted `DECIMAL(18,2)` values
+  unchanged for existing tests.
+- **T0.22f — Align accounting entities to the DDL.** Depends: T0.22. Fix entity↔DDL drift (DDL is the source
+  of truth): `Account.type` is `@Column({type:'enum'})` but the column is `VARCHAR(20)` → make it varchar
+  (keep `AccountType` as the TS type); `GLEntry.referenceDocId/costCenterId/branchId` are `varchar` in the
+  entity but `uuid` in the DDL → make them `uuid`. Do **not** change the DDL. Acceptance: typecheck + full
+  e2e green; entity column types match `tenant-schema.service.ts`.
+
 #### 0.6 Document lifecycle primitive
 - **T0.23 — Transaction base.** Depends: T0.21. Abstract class with `docstatus` 0/1/2 and `Submit`/`Cancel` hooks. Acceptance: state transitions are guarded.
-- **T0.24 — Submit/Cancel.** Depends: T0.23. `Submit` generates entries and locks; `Cancel` generates exact reversals; submitted docs are not editable/deletable. Acceptance: see T0.25.
+- **T0.24 — Submit/Cancel.** Depends: T0.23. `Submit` generates entries and locks; `Cancel` generates exact reversals; submitted docs are not editable/deletable. **Cancel must be idempotent**: link reversal entries to the originals (e.g. an `is_cancelled` flag / reversal reference) and reject a second cancel — `PostingService.cancel` currently re-posts reversals unconditionally, so a double-cancel over-reverses. Acceptance: see T0.25.
 - **T0.25 — Lifecycle tests.** Depends: T0.24. Acceptance: editing/deleting a submitted doc is blocked; Cancel nets out the effect; double-submit prevented.
 
 #### 0.7 Hierarchy resolver
