@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { DataSource, EntityManager, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { tenantStorage, assertSafeSchemaName } from '../tenant/tenant-context';
 import { GLEntry } from '../entities/gl-entry.entity';
 import { Company } from '../entities/company.entity';
 import { FiscalYear } from '../entities/fiscal-year.entity';
 import { Account } from '../entities/account.entity';
+import { ExchangeRate } from '../entities/exchange-rate.entity';
 
 export interface PostingLine {
   accountId: string;
@@ -46,7 +47,7 @@ export class PostingService {
       // ── Load company for base currency ──
       const company = await manager.getRepository(Company).findOneByOrFail({ id: input.companyId });
 
-      // ── Check fiscal period is open ──
+      // ── Check fiscal period exists and is open ──
       const fiscalYear = await manager.getRepository(FiscalYear).findOne({
         where: {
           companyId: input.companyId,
@@ -54,7 +55,10 @@ export class PostingService {
           endDate: MoreThanOrEqual(input.postingDate),
         },
       });
-      if (fiscalYear?.isClosed) {
+      if (!fiscalYear) {
+        throw new Error(`No open fiscal period for ${this.formatDate(input.postingDate)}`);
+      }
+      if (fiscalYear.isClosed) {
         throw new Error(`Fiscal period ${fiscalYear.name} is closed`);
       }
 
@@ -77,7 +81,13 @@ export class PostingService {
         }
 
         const currency = line.currency ?? company.baseCurrency;
-        const exchangeRate = line.exchangeRate ?? 1;
+        const exchangeRate = await this.resolveExchangeRate(
+          manager,
+          currency,
+          company.baseCurrency,
+          line.exchangeRate,
+          input.postingDate,
+        );
         const baseDebit = Math.round(line.debit * exchangeRate * 100) / 100;
         const baseCredit = Math.round(line.credit * exchangeRate * 100) / 100;
 
@@ -113,13 +123,23 @@ export class PostingService {
         );
       }
 
-      // ── Verify all accounts exist ──
+      // ── Verify all accounts exist, belong to the company, and are postable (leaf) ──
       const accountIds = [...new Set(input.lines.map((l) => l.accountId))];
-      const accountCount = await manager
+      const accounts = await manager
         .getRepository(Account)
-        .count({ where: accountIds.map((id) => ({ id })) });
-      if (accountCount !== accountIds.length) {
-        throw new Error('One or more account IDs not found');
+        .find({ where: accountIds.map((id) => ({ id })) });
+      const accountById = new Map(accounts.map((a) => [a.id, a]));
+      for (const id of accountIds) {
+        const account = accountById.get(id);
+        if (!account) {
+          throw new Error(`Account ${id} not found`);
+        }
+        if (account.companyId !== input.companyId) {
+          throw new Error(`Account ${id} does not belong to company ${input.companyId}`);
+        }
+        if (account.isGroup) {
+          throw new Error(`Account ${account.name} is a group account and cannot be posted to`);
+        }
       }
 
       const saved = await manager.getRepository(GLEntry).save(entries);
@@ -133,6 +153,52 @@ export class PostingService {
     }
   }
 
+  /**
+   * Resolve the exchange rate used to value a line in base currency.
+   * - Base-currency lines always use the supplied rate or 1.
+   * - Foreign-currency lines use the supplied rate if given, otherwise the most
+   *   recent ExchangeRate (valid_from <= postingDate) for that currency code.
+   *   A missing rate is an error — we never silently value foreign currency 1:1.
+   */
+  private async resolveExchangeRate(
+    manager: EntityManager,
+    currency: string,
+    baseCurrency: string,
+    suppliedRate: number | undefined,
+    postingDate: Date,
+  ): Promise<number> {
+    if (currency === baseCurrency) {
+      return suppliedRate ?? 1;
+    }
+    if (suppliedRate != null) {
+      return suppliedRate;
+    }
+
+    const rateRow = await manager
+      .getRepository(ExchangeRate)
+      .createQueryBuilder('er')
+      .innerJoin('er.currency', 'c')
+      .where('c.code = :code', { code: currency })
+      .andWhere('er.valid_from <= :postingDate', { postingDate })
+      .orderBy('er.valid_from', 'DESC')
+      .getOne();
+
+    if (!rateRow) {
+      throw new Error(
+        `No exchange rate found for ${currency} on ${this.formatDate(postingDate)}`,
+      );
+    }
+    return Number(rateRow.rate);
+  }
+
+  private formatDate(date: Date): string {
+    return new Date(date).toISOString().slice(0, 10);
+  }
+
+  // NOTE: cancel() is not yet idempotent — it has no link back to the original
+  // entries and no is_cancelled / reversal-reference guard, so calling it twice
+  // over-reverses. The reversal-reference + docstatus (0/1/2) machinery belongs
+  // to T0.24 (Submit/Cancel lifecycle); idempotency is deferred to that task.
   async cancel(original: GLEntry[], input: PostingInput): Promise<GLEntry[]> {
     const reversalLines: PostingLine[] = original.map((e) => ({
       accountId: e.accountId,

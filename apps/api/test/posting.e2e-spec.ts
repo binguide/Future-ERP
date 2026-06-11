@@ -10,6 +10,8 @@ import { GLEntry } from '../src/entities/gl-entry.entity';
 import { Company } from '../src/entities/company.entity';
 import { Account, AccountType } from '../src/entities/account.entity';
 import { FiscalYear } from '../src/entities/fiscal-year.entity';
+import { Currency } from '../src/entities/currency.entity';
+import { ExchangeRate } from '../src/entities/exchange-rate.entity';
 
 describe('PostingService (e2e)', () => {
   let app: INestApplication;
@@ -361,6 +363,135 @@ describe('PostingService (e2e)', () => {
     const netDebit = allEntries.reduce((s, e) => s + Number(e.baseDebit), 0);
     const netCredit = allEntries.reduce((s, e) => s + Number(e.baseCredit), 0);
     expect(netDebit).toBe(netCredit);
+  });
+
+  // ── FX rate lookup (gap #1) ──────────────────────────────
+  // A foreign-currency line with no explicit exchangeRate must be valued from
+  // the exchange_rates table, not silently defaulted to 1:1.
+  it('looks up the exchange rate for a foreign-currency line missing an explicit rate', async () => {
+    // Seed USD currency + a rate valid before the posting date.
+    await inTenant(async () => {
+      const usd = await ctx.getRepository(Currency).save(
+        ctx.getRepository(Currency).create({ code: 'USD', name: 'US Dollar', symbol: '$' }),
+      );
+      await ctx.getRepository(ExchangeRate).save(
+        ctx.getRepository(ExchangeRate).create({
+          currencyId: usd.id,
+          rate: 3.75,
+          validFrom: new Date('2026-01-01'),
+        }),
+      );
+    });
+
+    const entries = await inTenant(() =>
+      postingService.post({
+        ...makeInput(),
+        referenceDocId: '00000000-0000-0000-0000-000000000201',
+        lines: [
+          // No exchangeRate supplied → must resolve to 3.75 from exchange_rates.
+          { accountId: receivableAccountId, debit: 100, credit: 0, currency: 'USD' },
+          { accountId: revenueAccountId, debit: 0, credit: 375 },
+        ],
+      }),
+    );
+
+    const usdEntry = entries.find((e) => e.currency === 'USD')!;
+    expect(usdEntry).toBeDefined();
+    expect(Number(usdEntry.exchangeRate)).toBeCloseTo(3.75, 2);
+    expect(Number(usdEntry.baseDebit)).toBe(375);
+  });
+
+  it('rejects a foreign-currency line when no exchange rate can be found', async () => {
+    await expect(
+      inTenant(() =>
+        postingService.post({
+          ...makeInput(),
+          referenceDocId: '00000000-0000-0000-0000-000000000202',
+          lines: [
+            { accountId: receivableAccountId, debit: 100, credit: 0, currency: 'EUR' },
+            { accountId: revenueAccountId, debit: 0, credit: 100 },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(/no exchange rate found for eur/i);
+  });
+
+  // ── Missing fiscal period (gap #2) ───────────────────────
+  it('rejects posting on a date no fiscal period covers', async () => {
+    await expect(
+      inTenant(() =>
+        postingService.post({
+          ...makeInput(),
+          postingDate: new Date('2099-01-01'),
+          referenceDocId: '00000000-0000-0000-0000-000000000203',
+        }),
+      ),
+    ).rejects.toThrow(/no open fiscal period/i);
+  });
+
+  // ── Group (non-postable) account (gap #3) ────────────────
+  it('rejects posting to a group account', async () => {
+    const groupAccountId = await inTenant(
+      async () =>
+        (
+          await ctx.getRepository(Account).save(
+            ctx.getRepository(Account).create({
+              name: 'Assets (Group)',
+              type: AccountType.ASSET,
+              companyId,
+              isGroup: true,
+            }),
+          )
+        ).id,
+    );
+
+    await expect(
+      inTenant(() =>
+        postingService.post({
+          ...makeInput(),
+          referenceDocId: '00000000-0000-0000-0000-000000000204',
+          lines: [
+            { accountId: groupAccountId, debit: 100, credit: 0 },
+            { accountId: revenueAccountId, debit: 0, credit: 100 },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(/group account/i);
+  });
+
+  // ── Cross-company account reference (gap #4) ─────────────
+  it('rejects an entry referencing an account from another company', async () => {
+    // A second company in the same tenant, with its own open fiscal period.
+    const otherCompanyId = await inTenant(async () => {
+      const otherCompany = await ctx.getRepository(Company).save(
+        ctx.getRepository(Company).create({ name: 'Other Co', baseCurrency: 'SAR' }),
+      );
+      await ctx.getRepository(FiscalYear).save(
+        ctx.getRepository(FiscalYear).create({
+          name: 'Other FY 2026',
+          companyId: otherCompany.id,
+          startDate: new Date('2026-01-01'),
+          endDate: new Date('2026-12-31'),
+          isClosed: false,
+        }),
+      );
+      return otherCompany.id;
+    });
+
+    await expect(
+      inTenant(() =>
+        postingService.post({
+          ...makeInput(),
+          companyId: otherCompanyId,
+          referenceDocId: '00000000-0000-0000-0000-000000000205',
+          // accounts below belong to the original company, not otherCompanyId
+          lines: [
+            { accountId: receivableAccountId, debit: 100, credit: 0 },
+            { accountId: revenueAccountId, debit: 0, credit: 100 },
+          ],
+        }),
+      ),
+    ).rejects.toThrow(/does not belong to company/i);
   });
 
   // ── Tenant isolation ─────────────────────────────────────
