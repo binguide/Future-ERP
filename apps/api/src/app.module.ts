@@ -10,6 +10,7 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { DoctypeModule } from './doctype/doctype.module';
 import { ResourceModule } from './resource/resource.module';
+import { PermissionsModule } from './permissions/permissions.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ResourceModule } from './resource/resource.module';
     AuthModule,
     DoctypeModule,
     ResourceModule,
+    PermissionsModule,
   ],
   controllers: [AppController],
 })

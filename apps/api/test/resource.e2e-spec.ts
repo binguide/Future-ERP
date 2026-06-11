@@ -4,15 +4,22 @@ import { DataSource } from 'typeorm';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { Tenant } from '../src/entities/tenant.entity';
+import { Role } from '../src/entities/role.entity';
+import { Permission } from '../src/entities/permission.entity';
+import { User, UserRole } from '../src/entities/user.entity';
 import { TenantSchemaService } from '../src/tenant/tenant-schema.service';
 import { TenantContextService } from '../src/tenant/tenant-context.service';
 import { DoctypeService } from '../src/doctype/doctype.service';
+import { AbilityFactory } from '../src/permissions/ability.factory';
+import * as argon2 from 'argon2';
 
 describe('Generic Masters CRUD (e2e)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
   let schemaService: TenantSchemaService;
   let doctypeService: DoctypeService;
+  let ctx: TenantContextService;
+  let abilityFactory: AbilityFactory;
 
   const tenant: Partial<Tenant> = {
     id: '00000000-0000-0000-0000-000000000071',
@@ -21,6 +28,8 @@ describe('Generic Masters CRUD (e2e)', () => {
     schemaName: 't_resource_test',
     isActive: true,
   };
+
+  let jwtToken: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -33,22 +42,56 @@ describe('Generic Masters CRUD (e2e)', () => {
     dataSource = app.get<DataSource>(DataSource);
     schemaService = app.get<TenantSchemaService>(TenantSchemaService);
     doctypeService = app.get<DoctypeService>(DoctypeService);
+    ctx = app.get<TenantContextService>(TenantContextService);
+    abilityFactory = app.get<AbilityFactory>(AbilityFactory);
 
-    const ctx = app.get<TenantContextService>(TenantContextService);
     const tenantRepo = dataSource.getRepository(Tenant);
     await tenantRepo.upsert(tenant as Tenant, ['domain']);
     await schemaService.provisionSchema(tenant as Tenant);
 
-    await ctx.runInTenant(tenant.schemaName!, async () => {
-      await doctypeService.register('Item', 'Item', [
+    const schema = tenant.schemaName!;
+
+    await ctx.runInTenant(schema, async () => {
+      await ctx.getRepository(User).save({
+        email: 'admin@res.com',
+        name: 'Admin',
+        passwordHash: await argon2.hash('secret'),
+        role: UserRole.ADMIN,
+      });
+
+      await ctx.getRepository(Role).save({ name: 'admin', description: 'Admin role' });
+
+      const item = await doctypeService.register('Item', 'Item', [
         { fieldname: 'item_code', label: 'Item Code', fieldtype: 'Data', isMandatory: true },
         { fieldname: 'item_name', label: 'Item Name', fieldtype: 'Data', isMandatory: true },
         { fieldname: 'rate', label: 'Rate', fieldtype: 'Currency' },
       ]);
-      await doctypeService.register('Customer', 'Customer', [
+      const cust = await doctypeService.register('Customer', 'Customer', [
         { fieldname: 'customer_name', label: 'Customer Name', fieldtype: 'Data', isMandatory: true },
       ]);
+
+      const role = await ctx.getRepository(Role).findOne({ where: { name: 'admin' } });
+      await ctx.getRepository(Permission).save([
+        { roleId: role!.id, doctypeId: item.id, create: true, read: true, update: true },
+        { roleId: role!.id, doctypeId: cust.id, create: true },
+      ]);
     });
+
+    // Verify ability works inside tenant context
+    await ctx.runInTenant(schema, async () => {
+      const ability = await abilityFactory.createForRole('admin');
+      expect(ability.can('create', 'Item')).toBe(true);
+      expect(ability.can('read', 'Item')).toBe(true);
+    });
+
+    // Login to get JWT
+    const loginRes = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .set('x-tenant', tenant.domain!)
+      .send({ email: 'admin@res.com', password: 'secret' })
+      .expect(201);
+
+    jwtToken = loginRes.body.access_token;
   });
 
   afterAll(async () => {
@@ -63,6 +106,7 @@ describe('Generic Masters CRUD (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/resource/Item')
       .set('x-tenant', tenant.domain!)
+      .set('Authorization', `Bearer ${jwtToken}`)
       .send({ item_code: 'ITM-001', item_name: 'Widget', rate: 100 })
       .expect(201);
 
@@ -76,6 +120,7 @@ describe('Generic Masters CRUD (e2e)', () => {
     const res = await request(app.getHttpServer())
       .get('/api/resource/Item')
       .set('x-tenant', tenant.domain!)
+      .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     expect(Array.isArray(res.body)).toBe(true);
@@ -87,6 +132,7 @@ describe('Generic Masters CRUD (e2e)', () => {
     const res = await request(app.getHttpServer())
       .get(`/api/resource/Item/${itemId}`)
       .set('x-tenant', tenant.domain!)
+      .set('Authorization', `Bearer ${jwtToken}`)
       .expect(200);
 
     expect(res.body.id).toBe(itemId);
@@ -97,6 +143,7 @@ describe('Generic Masters CRUD (e2e)', () => {
     await request(app.getHttpServer())
       .get('/api/resource/Item/00000000-0000-0000-0000-000000009999')
       .set('x-tenant', tenant.domain!)
+      .set('Authorization', `Bearer ${jwtToken}`)
       .expect(404);
   });
 
@@ -104,6 +151,7 @@ describe('Generic Masters CRUD (e2e)', () => {
     const res = await request(app.getHttpServer())
       .put(`/api/resource/Item/${itemId}`)
       .set('x-tenant', tenant.domain!)
+      .set('Authorization', `Bearer ${jwtToken}`)
       .send({ rate: 150 })
       .expect(200);
 
@@ -115,17 +163,27 @@ describe('Generic Masters CRUD (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/resource/Customer')
       .set('x-tenant', tenant.domain!)
+      .set('Authorization', `Bearer ${jwtToken}`)
       .send({ customer_name: 'Acme Corp' })
       .expect(201);
 
     expect(res.body.data.customer_name).toBe('Acme Corp');
   });
 
-  it('POST /api/resource/:doctype returns 404 for unknown doctype', async () => {
+  it('POST /api/resource/:doctype returns 403 for unknown doctype', async () => {
     await request(app.getHttpServer())
       .post('/api/resource/NonExistent')
       .set('x-tenant', tenant.domain!)
+      .set('Authorization', `Bearer ${jwtToken}`)
       .send({ name: 'test' })
-      .expect(404);
+      .expect(403);
+  });
+
+  it('GET /api/resource/:doctype returns 403 without permission', async () => {
+    await request(app.getHttpServer())
+      .get('/api/resource/Customer')
+      .set('x-tenant', tenant.domain!)
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(403);
   });
 });

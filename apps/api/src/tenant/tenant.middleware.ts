@@ -56,11 +56,13 @@ export class TenantMiddleware implements NestMiddleware {
       return;
     }
 
-    tenantStorage.enterWith({
-      schemaName: schemaName ?? 'public',
-      manager: queryRunner.manager,
-    });
-    next();
+    tenantStorage.run(
+      {
+        schemaName: schemaName ?? 'public',
+        manager: queryRunner.manager,
+      },
+      next,
+    );
   }
 
   private extractDomain(req: Request): string | null {

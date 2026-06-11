@@ -65,6 +65,66 @@ const TENANT_MIGRATIONS: string[] = [
     CREATE INDEX IF NOT EXISTS idx_data_documents_doctype
     ON "data_documents"(doctype_id)
   `,
+  `
+    CREATE TABLE IF NOT EXISTS "roles" (
+      id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      name        VARCHAR(255) NOT NULL UNIQUE,
+      description TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "permissions" (
+      id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      role_id     uuid NOT NULL REFERENCES "roles"(id),
+      doctype_id  uuid NOT NULL REFERENCES "doctypes"(id),
+      "create"    BOOLEAN NOT NULL DEFAULT FALSE,
+      "read"      BOOLEAN NOT NULL DEFAULT FALSE,
+      "update"    BOOLEAN NOT NULL DEFAULT FALSE,
+      "delete"    BOOLEAN NOT NULL DEFAULT FALSE,
+      "submit"    BOOLEAN NOT NULL DEFAULT FALSE,
+      "cancel"    BOOLEAN NOT NULL DEFAULT FALSE,
+      "approve"   BOOLEAN NOT NULL DEFAULT FALSE,
+      "reject"    BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(role_id, doctype_id)
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "user_permissions" (
+      id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      user_id       uuid NOT NULL REFERENCES "users"(id),
+      doctype_id    uuid NOT NULL REFERENCES "doctypes"(id),
+      company_id    VARCHAR(255),
+      branch_id     VARCHAR(255),
+      warehouse_id  VARCHAR(255),
+      "create"      BOOLEAN NOT NULL DEFAULT FALSE,
+      "read"        BOOLEAN NOT NULL DEFAULT FALSE,
+      "update"      BOOLEAN NOT NULL DEFAULT FALSE,
+      "delete"      BOOLEAN NOT NULL DEFAULT FALSE,
+      "submit"      BOOLEAN NOT NULL DEFAULT FALSE,
+      "cancel"      BOOLEAN NOT NULL DEFAULT FALSE,
+      "approve"     BOOLEAN NOT NULL DEFAULT FALSE,
+      "reject"      BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(user_id, doctype_id, company_id, branch_id, warehouse_id)
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "approval_authorities" (
+      id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      role_id       uuid NOT NULL REFERENCES "roles"(id),
+      doctype_id    uuid NOT NULL REFERENCES "doctypes"(id),
+      value_ceiling DECIMAL(18,2),
+      can_approve   BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(role_id, doctype_id)
+    )
+  `,
 ];
 
 @Injectable()
