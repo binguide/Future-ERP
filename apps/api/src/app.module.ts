@@ -7,6 +7,8 @@ import { DatabaseModule } from './config/database.module';
 import { TenantModule } from './tenant/tenant.module';
 import { TenantMiddleware } from './tenant/tenant.middleware';
 import { TenantInterceptor } from './tenant/tenant.interceptor';
+import { UserModule } from './user/user.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { TenantInterceptor } from './tenant/tenant.interceptor';
     }),
     DatabaseModule,
     TenantModule,
+    UserModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [
