@@ -7,6 +7,8 @@ import {
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Observable } from 'rxjs';
+import { Request } from 'express';
+import './tenant-request';
 
 @Injectable()
 export class TenantInterceptor implements NestInterceptor {
@@ -16,8 +18,8 @@ export class TenantInterceptor implements NestInterceptor {
     context: ExecutionContext,
     next: CallHandler,
   ): Promise<Observable<any>> {
-    const request = context.switchToHttp().getRequest();
-    const schemaName: string | undefined = (request as any).tenantSchema;
+    const request = context.switchToHttp().getRequest<Request>();
+    const schemaName = request.tenantSchema;
 
     if (schemaName) {
       await this.dataSource.query(`SET search_path TO ${schemaName}, public`);

@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { TenantService } from './tenant.service';
+import './tenant-request';
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
@@ -12,8 +13,8 @@ export class TenantMiddleware implements NestMiddleware {
       try {
         const tenant = await this.tenantService.resolveByDomain(domain);
         if (tenant && tenant.isActive) {
-          (req as any).tenant = tenant;
-          (req as any).tenantSchema = tenant.schemaName;
+          req.tenant = tenant;
+          req.tenantSchema = tenant.schemaName;
         }
       } catch {
         // silently continue without tenant context

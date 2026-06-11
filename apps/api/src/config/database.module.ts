@@ -1,9 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Tenant } from '../entities/tenant.entity';
-import { Subscription } from '../entities/subscription.entity';
-import { TenantUser } from '../entities/tenant-user.entity';
+import { entities } from '../entities';
 
 @Module({
   imports: [
@@ -16,12 +14,12 @@ import { TenantUser } from '../entities/tenant-user.entity';
         username: config.get('DATABASE_USERNAME'),
         password: config.get('DATABASE_PASSWORD'),
         database: config.get('DATABASE_NAME'),
-        entities: [Tenant, Subscription, TenantUser],
+        entities,
         synchronize: false,
         logging: config.get('NODE_ENV') === 'development',
       }),
     }),
-    TypeOrmModule.forFeature([Tenant, Subscription, TenantUser]),
+    TypeOrmModule.forFeature(entities),
   ],
   exports: [TypeOrmModule],
 })

@@ -1,12 +1,5 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { BaseEntity } from './base.entity';
 import { Tenant } from './tenant.entity';
 
 export enum SubscriptionStatus {
@@ -17,10 +10,7 @@ export enum SubscriptionStatus {
 }
 
 @Entity({ schema: 'public', name: 'subscriptions' })
-export class Subscription {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Subscription extends BaseEntity {
   @Column({ name: 'tenant_id' })
   tenantId: string;
 
@@ -40,10 +30,4 @@ export class Subscription {
 
   @Column({ name: 'ends_at', type: 'timestamptz' })
   endsAt: Date;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 }

@@ -1,7 +1,5 @@
 import { DataSource, DataSourceOptions } from 'typeorm';
-import { Tenant } from '../entities/tenant.entity';
-import { Subscription } from '../entities/subscription.entity';
-import { TenantUser } from '../entities/tenant-user.entity';
+import { entities } from '../entities';
 import { envSchema } from './env.schema';
 import { config } from 'dotenv';
 
@@ -16,7 +14,7 @@ export const dataSourceOptions: DataSourceOptions = {
   username: env.DATABASE_USERNAME,
   password: env.DATABASE_PASSWORD,
   database: env.DATABASE_NAME,
-  entities: [Tenant, Subscription, TenantUser],
+  entities,
   migrations: ['src/migrations/*.ts'],
   logging: env.NODE_ENV === 'development',
 };

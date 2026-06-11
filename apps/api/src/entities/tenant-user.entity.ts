@@ -1,12 +1,5 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { BaseEntity } from './base.entity';
 import { Tenant } from './tenant.entity';
 
 export enum TenantUserRole {
@@ -16,10 +9,7 @@ export enum TenantUserRole {
 }
 
 @Entity({ schema: 'public', name: 'tenant_users' })
-export class TenantUser {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class TenantUser extends BaseEntity {
   @Column({ name: 'tenant_id' })
   tenantId: string;
 
@@ -45,10 +35,4 @@ export class TenantUser {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 }
