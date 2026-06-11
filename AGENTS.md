@@ -32,6 +32,8 @@ POS, fixed assets, tax) modeled closely on **ERPNext/Frappe** concepts.
   (a manual click-through) under its gate in [docs/AGENT_PLAN.md](docs/AGENT_PLAN.md), alongside the
   automated tests. Local stack: `docker compose up` (PostgreSQL + Valkey + Mailpit) then `pnpm dev`;
   Swagger UI at `/docs`, Mailpit UI for email.
+- **Version control**: commit each task on its own branch with a message referencing the task ID
+  (e.g. `T0.1: init monorepo`). One task = one branch = one reviewable commit/PR.
 - Run the pre-submit checklist (see end of this file) before declaring any task complete.
 
 ## Tech stack (fixed by the PRD, appendix أ)

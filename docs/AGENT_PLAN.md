@@ -50,6 +50,17 @@ Red lines:     the invariants this task must not break
 Do not move to the next phase before passing its **phase gate** (🚦 at the end of each phase): a set
 of tests/checks proving the phase's foundations are sound. These are suggested human review points.
 
+### Review cadence (stop for external review)
+After completing a batch, **stop and wait for an external review before continuing**. Stop at:
+1. **The end of each numbered subsection** (e.g. `0.0`, `0.1`, … `0.11`, and each `####` group in Phases 3 and 6).
+2. **Phases with a flat task list** (1, 2, 4, 5, 7, 8): stop **every ~5 tasks** and at the phase gate.
+3. **Always — regardless of the above — after these critical foundation tasks:** `T0.8` (tenant isolation),
+   `T0.21` (PostingService), `T0.24` (Submit/Cancel lifecycle), `T0.29` (Workflow gating).
+4. **Every 🚦 phase gate.**
+
+When you stop, post a short handoff: which task IDs you finished, what changed, how you verified each
+acceptance criterion, and any open questions — then wait. Do not start the next batch until the review approves.
+
 ---
 
 ## Local run & demo (keep it runnable — "walking skeleton")
