@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@openerp-x/shared': path.resolve(__dirname, '../../packages/shared/src'),
+      '@erpfuture/shared': path.resolve(__dirname, '../../packages/shared/src'),
     },
   },
   server: {

@@ -1,5 +1,5 @@
 {
-  "name": "@openerp-x/api",
+  "name": "@erpfuture/api",
   "version": "0.0.1",
   "private": true,
   "scripts": {
@@ -22,7 +22,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/typeorm": "^11.0.1",
-    "@openerp-x/shared": "workspace:*",
+    "@erpfuture/shared": "workspace:*",
     "argon2": "^0.44.0",
     "dotenv": "^17.4.2",
     "passport": "^0.7.0",

@@ -11,7 +11,7 @@ const config: Config = {
   coverageDirectory: './coverage',
   testEnvironment: 'node',
   moduleNameMapper: {
-    '@openerp-x/shared': '<rootDir>/../../packages/shared/src',
+    '@erpfuture/shared': '<rootDir>/../../packages/shared/src',
   },
 };
 

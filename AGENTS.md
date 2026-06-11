@@ -13,7 +13,7 @@ The PRD is the authoritative source of truth for architecture, scope, and the ch
 stack — read it before scaffolding or implementing anything. When the spec and any later code
 disagree, treat the spec as intent and reconcile explicitly rather than silently following code.
 
-The product is **OpenERP-X**: a multi-tenant SaaS ERP (accounting, inventory, sales, purchasing,
+The product is **ERPFuture**: a multi-tenant SaaS ERP (accounting, inventory, sales, purchasing,
 POS, fixed assets, tax) modeled closely on **ERPNext/Frappe** concepts.
 
 ## How to work in this repo (agent workflow)
@@ -68,16 +68,16 @@ deliberately all-MIT/OSS.
 | `pnpm dev` | Run all packages in dev mode (Turborepo) |
 | `pnpm test` | Run all tests (Turborepo) |
 | `pnpm lint` | Run all linters (Turborepo) |
-| `pnpm --filter @openerp-x/api test` | Run API unit tests only |
-| `pnpm --filter @openerp-x/api test:e2e` | Run API e2e tests |
-| `pnpm --filter @openerp-x/api test -- --testPathPattern=app.controller` | Run a single test file |
-| `pnpm --filter @openerp-x/shared build` | Build shared package only |
+| `pnpm --filter @erpfuture/api test` | Run API unit tests only |
+| `pnpm --filter @erpfuture/api test:e2e` | Run API e2e tests |
+| `pnpm --filter @erpfuture/api test -- --testPathPattern=app.controller` | Run a single test file |
+| `pnpm --filter @erpfuture/shared build` | Build shared package only |
 | `docker compose up` | Start PostgreSQL 17 + Valkey + Mailpit |
 
 **TypeORM migrations** (added when TypeORM is introduced in Phase 0.1):
-- `pnpm --filter @openerp-x/api typeorm migration:create src/migrations/MigrationName`
-- `pnpm --filter @openerp-x/api typeorm migration:run`
-- `pnpm --filter @openerp-x/api typeorm migration:revert`
+- `pnpm --filter @erpfuture/api typeorm migration:create src/migrations/MigrationName`
+- `pnpm --filter @erpfuture/api typeorm migration:run`
+- `pnpm --filter @erpfuture/api typeorm migration:revert`
 
 ## Architecture: invariants that must never be broken
 

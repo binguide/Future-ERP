@@ -1,7 +1,7 @@
 function App() {
   return (
     <div>
-      <h1>OpenERP-X</h1>
+      <h1>ERPFuture</h1>
       <p>Loading...</p>
     </div>
   );

@@ -9,6 +9,8 @@ import { TenantMiddleware } from './tenant/tenant.middleware';
 import { TenantInterceptor } from './tenant/tenant.interceptor';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
+import { DoctypeModule } from './doctype/doctype.module';
+import { ResourceModule } from './resource/resource.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { AuthModule } from './auth/auth.module';
     TenantModule,
     UserModule,
     AuthModule,
+    DoctypeModule,
+    ResourceModule,
   ],
   controllers: [AppController],
   providers: [

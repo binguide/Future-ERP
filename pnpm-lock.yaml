@@ -26,6 +26,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@erpfuture/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -47,9 +50,6 @@ importers:
       '@nestjs/typeorm':
         specifier: ^11.0.1
         version: 11.0.1(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.26)(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@1.0.0(pg@8.21.0)(ts-node@10.9.2(@swc/core@1.15.41)(@types/node@22.19.20)(typescript@5.9.3)))
-      '@openerp-x/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
       argon2:
         specifier: ^0.44.0
         version: 0.44.0
@@ -138,7 +138,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@openerp-x/shared':
+      '@erpfuture/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       react:

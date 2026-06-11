@@ -18,6 +18,52 @@ const TENANT_MIGRATIONS: string[] = [
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `,
+  `
+    CREATE TABLE IF NOT EXISTS "doctypes" (
+      id             uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      name           VARCHAR(255) NOT NULL UNIQUE,
+      label          VARCHAR(255) NOT NULL,
+      module         VARCHAR(255),
+      is_child       BOOLEAN NOT NULL DEFAULT FALSE,
+      is_single      BOOLEAN NOT NULL DEFAULT FALSE,
+      is_submittable BOOLEAN NOT NULL DEFAULT FALSE,
+      tracking       VARCHAR(20) NOT NULL DEFAULT 'None',
+      description    TEXT,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "docfields" (
+      id             uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      doctype_id     uuid NOT NULL REFERENCES "doctypes"(id),
+      fieldname      VARCHAR(255) NOT NULL,
+      label          VARCHAR(255) NOT NULL,
+      fieldtype      VARCHAR(255) NOT NULL,
+      options        VARCHAR(255),
+      idx            INTEGER NOT NULL DEFAULT 0,
+      is_mandatory   BOOLEAN NOT NULL DEFAULT FALSE,
+      is_read_only   BOOLEAN NOT NULL DEFAULT FALSE,
+      is_unique      BOOLEAN NOT NULL DEFAULT FALSE,
+      default_value  VARCHAR(255),
+      description    TEXT,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "data_documents" (
+      id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      doctype_id  uuid NOT NULL REFERENCES "doctypes"(id),
+      data        JSONB NOT NULL DEFAULT '{}',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_data_documents_doctype
+    ON "data_documents"(doctype_id)
+  `,
 ];
 
 @Injectable()

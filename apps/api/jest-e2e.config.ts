@@ -9,7 +9,7 @@ const config: Config = {
   },
   testEnvironment: 'node',
   moduleNameMapper: {
-    '@openerp-x/shared': '<rootDir>/../../packages/shared/src',
+    '@erpfuture/shared': '<rootDir>/../../packages/shared/src',
   },
 };
 
