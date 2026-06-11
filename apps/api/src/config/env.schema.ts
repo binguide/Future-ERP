@@ -7,7 +7,7 @@ export const envSchema = z.object({
   DATABASE_PORT: z.coerce.number().int().positive().default(5432),
   DATABASE_USERNAME: z.string().default('operp'),
   DATABASE_PASSWORD: z.string().default('operp_secret'),
-  DATABASE_NAME: z.string().default('operp'),
+  DATABASE_NAME: z.string().default('ERPFuture'),
   VALKEY_HOST: z.string().default('localhost'),
   VALKEY_PORT: z.coerce.number().int().positive().default(6379),
   JWT_SECRET: z.string().min(32).default('test-jwt-secret-that-is-at-least-32-chars'),
