@@ -47,13 +47,10 @@ export class DoctypeService {
   }
 
   async getFields(name: string): Promise<DocField[]> {
-    const doctype = await this.doctypeRepo.findOne({ where: { name } });
+    const doctype = await this.findByName(name);
     if (!doctype) {
       throw new NotFoundException(`Doctype ${name} not found`);
     }
-    return this.docfieldRepo.find({
-      where: { doctype: { id: doctype.id } },
-      order: { idx: 'ASC' },
-    });
+    return doctype.fields;
   }
 }
