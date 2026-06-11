@@ -20,7 +20,7 @@ export class Tenant {
   @Column({ name: 'schema_name', length: 63, unique: true })
   schemaName: string;
 
-  @Column({ default: true })
+  @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
   @CreateDateColumn({ name: 'created_at' })

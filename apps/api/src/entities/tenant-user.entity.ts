@@ -43,7 +43,7 @@ export class TenantUser {
   })
   role: TenantUserRole;
 
-  @Column({ default: true })
+  @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
