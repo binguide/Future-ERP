@@ -367,7 +367,7 @@ describe('Accounting Entities (e2e)', () => {
     beforeAll(async () => {
       otherSchema = 't_acct_iso_test';
       const otherTenant: Partial<Tenant> = {
-        id: '00000000-0000-0000-0000-000000000071',
+        id: '00000000-0000-0000-0000-000000000072',
         name: 'Isolation Test Tenant',
         domain: 'acct-isolation-test',
         schemaName: otherSchema,

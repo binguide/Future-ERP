@@ -200,6 +200,36 @@ const TENANT_MIGRATIONS: string[] = [
       UNIQUE(company_id, account_number)
     )
   `,
+  `
+    CREATE TABLE IF NOT EXISTS "gl_entries" (
+      id                uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      company_id        uuid NOT NULL REFERENCES "companies"(id),
+      account_id        uuid NOT NULL REFERENCES "accounts"(id),
+      debit             DECIMAL(18,2) NOT NULL DEFAULT 0,
+      credit            DECIMAL(18,2) NOT NULL DEFAULT 0,
+      currency          VARCHAR(3) NOT NULL,
+      exchange_rate     DECIMAL(18,6) NOT NULL DEFAULT 1,
+      base_debit        DECIMAL(18,2) NOT NULL DEFAULT 0,
+      base_credit       DECIMAL(18,2) NOT NULL DEFAULT 0,
+      posting_date      DATE NOT NULL,
+      reference_doctype VARCHAR(255) NOT NULL,
+      reference_doc_id  uuid NOT NULL,
+      cost_center_id    uuid,
+      branch_id         uuid,
+      description       TEXT,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CHECK (debit = 0 OR credit = 0)
+    )
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_gl_entries_reference
+    ON "gl_entries"(reference_doctype, reference_doc_id)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_gl_entries_company_date
+    ON "gl_entries"(company_id, posting_date)
+  `,
 ];
 
 @Injectable()

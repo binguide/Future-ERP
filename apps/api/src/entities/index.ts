@@ -16,6 +16,7 @@ import { ExchangeRate } from './exchange-rate.entity';
 import { FiscalYear } from './fiscal-year.entity';
 import { CostCenter } from './cost-center.entity';
 import { Account } from './account.entity';
+import { GLEntry } from './gl-entry.entity';
 
 export { BaseEntity } from './base.entity';
 export { Tenant } from './tenant.entity';
@@ -36,6 +37,7 @@ export { ExchangeRate } from './exchange-rate.entity';
 export { FiscalYear } from './fiscal-year.entity';
 export { CostCenter } from './cost-center.entity';
 export { Account, AccountType } from './account.entity';
+export { GLEntry } from './gl-entry.entity';
 
 /** Public-schema entities (registered once in the root DataSource). */
 export const publicEntities = [Tenant, Subscription, TenantUser];
@@ -45,7 +47,7 @@ export const tenantEntities = [
   User, Doctype, DocField, DataDocument,
   Role, Permission, UserPermission, ApprovalAuthority,
   Company, Branch, Currency, ExchangeRate,
-  FiscalYear, CostCenter, Account,
+  FiscalYear, CostCenter, Account, GLEntry,
 ];
 
 /** All entities the DataSource must know about. */
