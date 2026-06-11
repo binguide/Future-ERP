@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { DoctypeModule } from './doctype/doctype.module';
 import { ResourceModule } from './resource/resource.module';
 import { PermissionsModule } from './permissions/permissions.module';
+import { PostingModule } from './accounting/posting.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PermissionsModule } from './permissions/permissions.module';
     DoctypeModule,
     ResourceModule,
     PermissionsModule,
+    PostingModule,
   ],
   controllers: [AppController],
 })
