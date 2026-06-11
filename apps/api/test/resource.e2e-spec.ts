@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { Tenant } from '../src/entities/tenant.entity';
 import { TenantSchemaService } from '../src/tenant/tenant-schema.service';
+import { TenantContextService } from '../src/tenant/tenant-context.service';
 import { DoctypeService } from '../src/doctype/doctype.service';
 
 describe('Generic Masters CRUD (e2e)', () => {
@@ -33,24 +34,24 @@ describe('Generic Masters CRUD (e2e)', () => {
     schemaService = app.get<TenantSchemaService>(TenantSchemaService);
     doctypeService = app.get<DoctypeService>(DoctypeService);
 
+    const ctx = app.get<TenantContextService>(TenantContextService);
     const tenantRepo = dataSource.getRepository(Tenant);
     await tenantRepo.upsert(tenant as Tenant, ['domain']);
     await schemaService.provisionSchema(tenant as Tenant);
-    await dataSource.query(`SET search_path TO "${tenant.schemaName}"`);
 
-    await doctypeService.register('Item', 'Item', [
-      { fieldname: 'item_code', label: 'Item Code', fieldtype: 'Data', isMandatory: true },
-      { fieldname: 'item_name', label: 'Item Name', fieldtype: 'Data', isMandatory: true },
-      { fieldname: 'rate', label: 'Rate', fieldtype: 'Currency' },
-    ]);
-
-    await doctypeService.register('Customer', 'Customer', [
-      { fieldname: 'customer_name', label: 'Customer Name', fieldtype: 'Data', isMandatory: true },
-    ]);
+    await ctx.runInTenant(tenant.schemaName!, async () => {
+      await doctypeService.register('Item', 'Item', [
+        { fieldname: 'item_code', label: 'Item Code', fieldtype: 'Data', isMandatory: true },
+        { fieldname: 'item_name', label: 'Item Name', fieldtype: 'Data', isMandatory: true },
+        { fieldname: 'rate', label: 'Rate', fieldtype: 'Currency' },
+      ]);
+      await doctypeService.register('Customer', 'Customer', [
+        { fieldname: 'customer_name', label: 'Customer Name', fieldtype: 'Data', isMandatory: true },
+      ]);
+    });
   });
 
   afterAll(async () => {
-    await dataSource.query('SET search_path TO public');
     await schemaService.dropSchema(tenant as Tenant).catch(() => {});
     await dataSource.getRepository(Tenant).delete({ domain: 'resource-test' });
     await app.close();

@@ -1,23 +1,25 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, Controller, Get, Req } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { Tenant } from '../src/entities/tenant.entity';
 import { TenantSchemaService } from '../src/tenant/tenant-schema.service';
+import { TenantContextService } from '../src/tenant/tenant-context.service';
 
 const TABLE = '_tenant_items';
 
 @Controller('test')
 class TestController {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(private readonly ctx: TenantContextService) {}
 
   @Get('tenant-items')
   async tenantItems(@Req() req: any) {
     const schema = req.tenantSchema || 'public';
-    const result = await this.dataSource.query(
-      `SELECT * FROM "${schema}"."${TABLE}" ORDER BY name`,
+    // UNqualified table name: which rows come back depends entirely on the
+    // search_path the middleware pinned for this request — the isolation under test.
+    const result = await this.ctx.manager.query(
+      `SELECT * FROM "${TABLE}" ORDER BY name`,
     );
     return { schema, items: result };
   }

@@ -5,8 +5,6 @@ import { TenantService } from './tenant.service';
 import { TenantSchemaService } from './tenant-schema.service';
 import { TenantMiddleware } from './tenant.middleware';
 
-// Note: TenantInterceptor is registered globally via APP_INTERCEPTOR in AppModule,
-// so it is intentionally not declared here.
 @Module({
   imports: [TypeOrmModule.forFeature([Tenant])],
   providers: [TenantService, TenantSchemaService, TenantMiddleware],

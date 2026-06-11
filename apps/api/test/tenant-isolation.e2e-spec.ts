@@ -1,18 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, Controller, Get, Req } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { Tenant } from '../src/entities/tenant.entity';
+import { TenantContextService } from '../src/tenant/tenant-context.service';
 
 @Controller('test')
 class TestController {
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(private readonly ctx: TenantContextService) {}
 
+  // Query via the request-scoped context manager so current_schema() reflects
+  // the connection the middleware pinned (this is what exercises search_path).
   @Get('current-schema')
   async currentSchema() {
-    const result = await this.dataSource.query('SELECT current_schema()');
+    const result = await this.ctx.manager.query('SELECT current_schema()');
     return { schema: result[0].current_schema };
   }
 
@@ -124,7 +126,7 @@ describe('Tenant isolation (e2e)', () => {
     });
   });
 
-  describe('TenantInterceptor search_path', () => {
+  describe('tenant search_path (request-scoped connection)', () => {
     it('sets search_path to tenant_alpha schema', () => {
       return request(app.getHttpServer())
         .get('/api/test/current-schema')

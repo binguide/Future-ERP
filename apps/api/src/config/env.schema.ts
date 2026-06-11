@@ -16,11 +16,29 @@ export const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+// Dev/test conveniences that must never reach production.
+const INSECURE_DEFAULTS: Partial<Record<keyof Env, string>> = {
+  JWT_SECRET: 'test-jwt-secret-that-is-at-least-32-chars',
+  DATABASE_PASSWORD: 'operp_secret',
+};
+
 export function validateEnv(config: Record<string, unknown>) {
   const result = envSchema.safeParse(config);
   if (!result.success) {
     const messages = result.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
     throw new Error(`Environment validation failed:\n${messages.join('\n')}`);
   }
+
+  if (result.data.NODE_ENV === 'production') {
+    const offenders = (
+      Object.keys(INSECURE_DEFAULTS) as (keyof Env)[]
+    ).filter((key) => result.data[key] === INSECURE_DEFAULTS[key]);
+    if (offenders.length > 0) {
+      throw new Error(
+        `These secrets must be set to non-default values in production: ${offenders.join(', ')}`,
+      );
+    }
+  }
+
   return result.data;
 }

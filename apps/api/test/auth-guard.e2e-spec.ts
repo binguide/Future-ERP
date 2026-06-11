@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { Tenant } from '../src/entities/tenant.entity';
 import { TenantSchemaService } from '../src/tenant/tenant-schema.service';
+import { TenantContextService } from '../src/tenant/tenant-context.service';
 import { UserService } from '../src/user/user.service';
 
 describe('Auth guard (e2e)', () => {
@@ -33,12 +34,13 @@ describe('Auth guard (e2e)', () => {
     schemaService = app.get<TenantSchemaService>(TenantSchemaService);
     userService = app.get<UserService>(UserService);
 
+    const ctx = app.get<TenantContextService>(TenantContextService);
     const tenantRepo = dataSource.getRepository(Tenant);
     await tenantRepo.upsert(tenant as Tenant, ['domain']);
     await schemaService.provisionSchema(tenant as Tenant);
-    await dataSource.query(`SET search_path TO "${tenant.schemaName}"`);
-    await userService.create('guard@example.com', 'Guard User', 'GuardPass1');
-    await dataSource.query('SET search_path TO public');
+    await ctx.runInTenant(tenant.schemaName!, () =>
+      userService.create('guard@example.com', 'Guard User', 'GuardPass1'),
+    );
   });
 
   afterAll(async () => {

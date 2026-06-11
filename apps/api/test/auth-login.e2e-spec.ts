@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { Tenant } from '../src/entities/tenant.entity';
 import { TenantSchemaService } from '../src/tenant/tenant-schema.service';
+import { TenantContextService } from '../src/tenant/tenant-context.service';
 import { UserService } from '../src/user/user.service';
 import { JwtService } from '@nestjs/jwt';
 
@@ -36,16 +37,17 @@ describe('Auth login (e2e)', () => {
     userService = app.get<UserService>(UserService);
     jwtService = app.get<JwtService>(JwtService);
 
+    const ctx = app.get<TenantContextService>(TenantContextService);
     const tenantRepo = dataSource.getRepository(Tenant);
     await tenantRepo.upsert(tenant as Tenant, ['domain']);
     await schemaService.provisionSchema(tenant as Tenant);
-    await dataSource.query(`SET search_path TO "${tenant.schemaName}"`);
 
-    await userService.create('ahmed@example.com', 'Ahmed', 'SecurePass1');
+    await ctx.runInTenant(tenant.schemaName!, () =>
+      userService.create('ahmed@example.com', 'Ahmed', 'SecurePass1'),
+    );
   });
 
   afterAll(async () => {
-    await dataSource.query('SET search_path TO public');
     await schemaService.dropSchema(tenant as Tenant).catch(() => {});
     await dataSource.getRepository(Tenant).delete({ domain: 'auth-test' });
     await app.close();

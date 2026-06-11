@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Tenant } from '../entities/tenant.entity';
+import { assertSafeSchemaName } from './tenant-context';
 
 // SQL migrations run inside a tenant schema after provisioning.
 // Extended as new tenant-scoped entities are introduced.
@@ -71,10 +72,21 @@ export class TenantSchemaService {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   async provisionSchema(tenant: Tenant): Promise<void> {
-    await this.dataSource.query(
-      `CREATE SCHEMA IF NOT EXISTS "${tenant.schemaName}"`,
-    );
-    await this.runTenantMigrations(tenant);
+    const schema = assertSafeSchemaName(tenant.schemaName);
+    // Pin ONE connection: the unqualified CREATE TABLE statements rely on the
+    // search_path set just before them, so both must run on the same connection
+    // or the tables (and their FKs) land in `public` instead of the schema.
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+      await queryRunner.query(`SET search_path TO "${schema}"`);
+      for (const sql of TENANT_MIGRATIONS) {
+        await queryRunner.query(sql);
+      }
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async schemaExists(schemaName: string): Promise<boolean> {
@@ -86,16 +98,7 @@ export class TenantSchemaService {
   }
 
   async dropSchema(tenant: Tenant): Promise<void> {
-    await this.dataSource.query(
-      `DROP SCHEMA IF EXISTS "${tenant.schemaName}" CASCADE`,
-    );
-  }
-
-  private async runTenantMigrations(tenant: Tenant): Promise<void> {
-    await this.dataSource.query(`SET search_path TO "${tenant.schemaName}"`);
-    for (const sql of TENANT_MIGRATIONS) {
-      await this.dataSource.query(sql);
-    }
-    await this.dataSource.query('SET search_path TO public');
+    const schema = assertSafeSchemaName(tenant.schemaName);
+    await this.dataSource.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
   }
 }

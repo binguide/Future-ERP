@@ -1,17 +1,20 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { Doctype } from '../entities/doctype.entity';
 import { DocField } from '../entities/docfield.entity';
+import { TenantContextService } from '../tenant/tenant-context.service';
 
 @Injectable()
 export class DoctypeService {
-  constructor(
-    @InjectRepository(Doctype)
-    private readonly doctypeRepo: Repository<Doctype>,
-    @InjectRepository(DocField)
-    private readonly docfieldRepo: Repository<DocField>,
-  ) {}
+  constructor(private readonly ctx: TenantContextService) {}
+
+  // doctypes/docfields are tenant-scoped: resolve repos from the request's
+  // pinned connection so they hit the tenant schema, not the shared pool.
+  private get doctypeRepo() {
+    return this.ctx.getRepository(Doctype);
+  }
+  private get docfieldRepo() {
+    return this.ctx.getRepository(DocField);
+  }
 
   async register(name: string, label: string, fields: Partial<DocField>[], module?: string): Promise<Doctype> {
     const existing = await this.doctypeRepo.findOne({ where: { name } });
