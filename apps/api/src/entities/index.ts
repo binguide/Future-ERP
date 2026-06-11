@@ -9,6 +9,13 @@ import { Role } from './role.entity';
 import { Permission } from './permission.entity';
 import { UserPermission } from './user-permission.entity';
 import { ApprovalAuthority } from './approval-authority.entity';
+import { Company } from './company.entity';
+import { Branch } from './branch.entity';
+import { Currency } from './currency.entity';
+import { ExchangeRate } from './exchange-rate.entity';
+import { FiscalYear } from './fiscal-year.entity';
+import { CostCenter } from './cost-center.entity';
+import { Account } from './account.entity';
 
 export { BaseEntity } from './base.entity';
 export { Tenant } from './tenant.entity';
@@ -22,6 +29,13 @@ export { Role } from './role.entity';
 export { Permission } from './permission.entity';
 export { UserPermission } from './user-permission.entity';
 export { ApprovalAuthority } from './approval-authority.entity';
+export { Company } from './company.entity';
+export { Branch } from './branch.entity';
+export { Currency } from './currency.entity';
+export { ExchangeRate } from './exchange-rate.entity';
+export { FiscalYear } from './fiscal-year.entity';
+export { CostCenter } from './cost-center.entity';
+export { Account, AccountType } from './account.entity';
 
 /** Public-schema entities (registered once in the root DataSource). */
 export const publicEntities = [Tenant, Subscription, TenantUser];
@@ -30,6 +44,8 @@ export const publicEntities = [Tenant, Subscription, TenantUser];
 export const tenantEntities = [
   User, Doctype, DocField, DataDocument,
   Role, Permission, UserPermission, ApprovalAuthority,
+  Company, Branch, Currency, ExchangeRate,
+  FiscalYear, CostCenter, Account,
 ];
 
 /** All entities the DataSource must know about. */

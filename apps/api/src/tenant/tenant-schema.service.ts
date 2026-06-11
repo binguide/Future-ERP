@@ -125,6 +125,81 @@ const TENANT_MIGRATIONS: string[] = [
       UNIQUE(role_id, doctype_id)
     )
   `,
+  `
+    CREATE TABLE IF NOT EXISTS "companies" (
+      id                  uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      name                VARCHAR(255) NOT NULL UNIQUE,
+      base_currency       VARCHAR(3) NOT NULL,
+      default_valuation_method VARCHAR(50) NOT NULL DEFAULT 'Moving Average',
+      allow_negative_stock BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "branches" (
+      id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      name        VARCHAR(255) NOT NULL,
+      company_id  uuid NOT NULL REFERENCES "companies"(id),
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "currencies" (
+      id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      code        VARCHAR(3) NOT NULL UNIQUE,
+      name        VARCHAR(255) NOT NULL,
+      symbol      VARCHAR(10),
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "exchange_rates" (
+      id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      currency_id   uuid NOT NULL REFERENCES "currencies"(id),
+      rate          DECIMAL(18,6) NOT NULL,
+      valid_from    DATE NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "fiscal_years" (
+      id           uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      name         VARCHAR(255) NOT NULL,
+      company_id   uuid NOT NULL REFERENCES "companies"(id),
+      start_date   DATE NOT NULL,
+      end_date     DATE NOT NULL,
+      is_closed    BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "cost_centers" (
+      id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      name        VARCHAR(255) NOT NULL,
+      company_id  uuid REFERENCES "companies"(id),
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "accounts" (
+      id              uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      name            VARCHAR(255) NOT NULL,
+      account_number  VARCHAR(50),
+      type            VARCHAR(20) NOT NULL,
+      is_group        BOOLEAN NOT NULL DEFAULT FALSE,
+      company_id      uuid NOT NULL REFERENCES "companies"(id),
+      parent_id       uuid REFERENCES "accounts"(id),
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(company_id, account_number)
+    )
+  `,
 ];
 
 @Injectable()
