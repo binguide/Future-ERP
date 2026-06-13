@@ -12,6 +12,7 @@ import { TransactionDocument } from '../src/entities/transaction-document.entity
 import { Company } from '../src/entities/company.entity';
 import { Account, AccountType } from '../src/entities/account.entity';
 import { FiscalYear } from '../src/entities/fiscal-year.entity';
+import { Doctype } from '../src/entities/doctype.entity';
 
 describe('Document lifecycle (T0.23–T0.25)', () => {
   let app: INestApplication;
@@ -50,6 +51,11 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
     await schemaService.provisionSchema(tenant as Tenant);
 
     await inTenant(async () => {
+      // Register the TransactionDocument doctype so workflow lookup succeeds
+      await ctx.getRepository(Doctype).save(
+        ctx.getRepository(Doctype).create({ name: 'TransactionDocument', label: 'Transaction Document' }),
+      );
+
       const company = await ctx.getRepository(Company).save(
         ctx.getRepository(Company).create({ name: 'Lifecycle Co', baseCurrency: 'SAR' }),
       );
@@ -84,6 +90,8 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
     await dataSource.getRepository(Tenant).delete({ domain: 'lifecycle-test' });
     await app.close();
   });
+
+  const actorId = '00000000-0000-0000-0000-000000000da1';
 
   const refDocId = '00000000-0000-0000-0000-000000000d01';
   const refDoctype = 'TransactionDocument';
@@ -137,7 +145,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
           { accountId: assetAcctId, debit: 1000, credit: 0 },
           { accountId: incomeAcctId, debit: 0, credit: 1000 },
         ],
-      }),
+      }, actorId),
     );
 
     expect(entries).toHaveLength(2);
@@ -148,6 +156,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
     });
     expect(updated.docstatus).toBe(1);
     expect(updated.submittedAt).toBeInstanceOf(Date);
+    expect(updated.submittedBy).toBe(actorId);
     expect(updated.cancelledAt).toBeNull();
 
     // Verify GL entries exist and are not reversals
@@ -179,7 +188,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
             { accountId: assetAcctId, debit: 1, credit: 0 },
             { accountId: incomeAcctId, debit: 0, credit: 1 },
           ],
-        }),
+        }, actorId),
       ),
     ).rejects.toThrow(/only draft/i);
   });
@@ -197,7 +206,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
         postingDate: new Date('2026-07-02'),
         referenceDoctype: refDoctype,
         referenceDocId: refDocId,
-      }),
+      }, actorId),
     );
 
     // Reversal entries exist
@@ -217,6 +226,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
     });
     expect(updated.docstatus).toBe(2);
     expect(updated.cancelledAt).toBeInstanceOf(Date);
+    expect(updated.cancelledBy).toBe(actorId);
 
     // ── Idempotency: second cancel is rejected ─────────
     await expect(
@@ -226,7 +236,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
           postingDate: new Date('2026-07-02'),
           referenceDoctype: refDoctype,
           referenceDocId: refDocId,
-        }),
+        }, actorId),
       ),
     ).rejects.toThrow(/only submitted/i);
 
@@ -261,7 +271,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
           postingDate: new Date('2026-07-02'),
           referenceDoctype: refDoctype,
           referenceDocId: '00000000-0000-0000-0000-000000000d03',
-        }),
+        }, actorId),
       ),
     ).rejects.toThrow(/only submitted/i);
   });
@@ -292,7 +302,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
           { accountId: assetAcctId, debit: 500, credit: 0 },
           { accountId: incomeAcctId, debit: 0, credit: 500 },
         ],
-      }),
+      }, actorId),
     );
 
     // Cancel once (via LifecycleService)
@@ -302,7 +312,7 @@ describe('Document lifecycle (T0.23–T0.25)', () => {
         postingDate: new Date('2026-07-02'),
         referenceDoctype: refDoctype,
         referenceDocId: refId2,
-      }),
+      }, actorId),
     );
 
     // Try calling PostingService.cancel() directly with the original entries

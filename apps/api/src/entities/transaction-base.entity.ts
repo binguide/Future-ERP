@@ -16,4 +16,7 @@ export abstract class TransactionBase extends BaseEntity {
 
   @Column({ type: 'uuid', name: 'cancelled_by', nullable: true })
   cancelledBy: string | null;
+
+  @Column({ type: 'uuid', name: 'workflow_state_id', nullable: true })
+  workflowStateId: string | null;
 }

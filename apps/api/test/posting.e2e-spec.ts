@@ -365,6 +365,112 @@ describe('PostingService (e2e)', () => {
     expect(netDebit).toBe(netCredit);
   });
 
+  // ── Cancel into closed fiscal period (fix #3) ────────────
+  it('rejects cancel into a closed fiscal period', async () => {
+    const refDocId = '00000000-0000-0000-0000-000000000d06';
+
+    const original = await inTenant(() =>
+      postingService.post({
+        ...makeInput(),
+        referenceDocId: refDocId,
+        lines: [
+          { accountId: receivableAccountId, debit: 100, credit: 0 },
+          { accountId: revenueAccountId, debit: 0, credit: 100 },
+        ],
+      }),
+    );
+
+    // Close the fiscal year
+    await inTenant(async () => {
+      const fy = await ctx.getRepository(FiscalYear).findOneByOrFail({ companyId, isClosed: false });
+      fy.isClosed = true;
+      await ctx.getRepository(FiscalYear).save(fy);
+    });
+
+    await expect(
+      inTenant(() =>
+        postingService.cancel(original, {
+          ...makeInput(),
+          referenceDocId: refDocId,
+          postingDate: new Date('2026-07-02'),
+        }),
+      ),
+    ).rejects.toThrow(/closed/i);
+
+    // Re-open FY 2026 for subsequent tests
+    await inTenant(async () => {
+      const fy = await ctx.getRepository(FiscalYear).findOneByOrFail({
+        companyId, name: 'FY 2026',
+      });
+      fy.isClosed = false;
+      await ctx.getRepository(FiscalYear).save(fy);
+    });
+  });
+
+  // ── Cancel partial entries (fix #5) ──────────────────────
+  it('rejects cancel with unbalanced/partial entries', async () => {
+    const refDocId = '00000000-0000-0000-0000-000000000d07';
+
+    const original = await inTenant(() =>
+      postingService.post({
+        ...makeInput(),
+        referenceDocId: refDocId,
+        lines: [
+          { accountId: receivableAccountId, debit: 500, credit: 0 },
+          { accountId: revenueAccountId, debit: 0, credit: 500 },
+        ],
+      }),
+    );
+
+    // Pass only one of the two original entries → reversal will be unbalanced
+    const partial = [original[0]];
+    await expect(
+      inTenant(() =>
+        postingService.cancel(partial, {
+          ...makeInput(),
+          referenceDocId: refDocId,
+          postingDate: new Date('2026-07-02'),
+        }),
+      ),
+    ).rejects.toThrow(/unbalanced reversal/i);
+  });
+
+  // ── UNIQUE index on reversal_of (fix #4) ──────────────────
+  it('UNIQUE index on reversal_of prevents double-reversal at DB level', async () => {
+    const refDocId = '00000000-0000-0000-0000-000000000d08';
+
+    const original = await inTenant(() =>
+      postingService.post({
+        ...makeInput(),
+        referenceDocId: refDocId,
+        lines: [
+          { accountId: receivableAccountId, debit: 200, credit: 0 },
+          { accountId: revenueAccountId, debit: 0, credit: 200 },
+        ],
+      }),
+    );
+
+    // First cancel
+    await inTenant(() =>
+      postingService.cancel(original, {
+        ...makeInput(),
+        referenceDocId: refDocId,
+        postingDate: new Date('2026-07-02'),
+      }),
+    );
+
+    // Second cancel should fail due to UNIQUE index (count check + DB constraint)
+    await expect(
+      inTenant(() =>
+        postingService.cancel(original, {
+          ...makeInput(),
+          referenceDocId: refDocId,
+          postingDate: new Date('2026-07-02'),
+        }),
+      ),
+    ).rejects.toThrow(/already been reversed/i);
+  });
+
   // ── FX rate lookup (gap #1) ──────────────────────────────
   // A foreign-currency line with no explicit exchangeRate must be valued from
   // the exchange_rates table, not silently defaulted to 1:1.

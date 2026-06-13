@@ -4,6 +4,7 @@ import { BaseEntity } from './base.entity';
 export enum UserRole {
   ADMIN = 'admin',
   USER = 'user',
+  MANAGER = 'manager',
   READONLY = 'readonly',
 }
 

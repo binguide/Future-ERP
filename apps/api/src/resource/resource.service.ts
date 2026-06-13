@@ -4,10 +4,14 @@ import { Doctype } from '../entities/doctype.entity';
 import { DataDocument } from '../entities/data-document.entity';
 import { UserPermission } from '../entities/user-permission.entity';
 import { TenantContextService } from '../tenant/tenant-context.service';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class ResourceService {
-  constructor(private readonly ctx: TenantContextService) {}
+  constructor(
+    private readonly ctx: TenantContextService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get doctypeRepo() {
     return this.ctx.getRepository(Doctype);
@@ -86,7 +90,15 @@ export class ResourceService {
   async create(doctypeName: string, data: Record<string, unknown>) {
     const doctype = await this.resolveDoctype(doctypeName);
     const doc = this.docRepo.create({ doctype, data });
-    return this.docRepo.save(doc);
+    const saved = await this.docRepo.save(doc);
+
+    if (await this.auditService.shouldTrack(doctype.id)) {
+      await this.auditService.recordVersion(doctype.id, saved.id, null, data);
+      await this.auditService.logActivity(
+        doctype.id, saved.id, 'Create', 'Document created',
+      );
+    }
+    return saved;
   }
 
   async update(doctypeName: string, id: string, data: Record<string, unknown>) {
@@ -95,8 +107,17 @@ export class ResourceService {
       where: { id, doctype: { id: doctype.id } },
     });
     if (!doc) return null;
+    const oldData = { ...doc.data } as Record<string, unknown>;
     doc.data = { ...doc.data, ...data } as Record<string, unknown>;
-    return this.docRepo.save(doc);
+    const saved = await this.docRepo.save(doc);
+
+    if (await this.auditService.shouldTrack(doctype.id)) {
+      await this.auditService.recordVersion(doctype.id, id, oldData, saved.data as Record<string, unknown>);
+      await this.auditService.logActivity(
+        doctype.id, id, 'Update', 'Document updated', oldData, saved.data as Record<string, unknown>,
+      );
+    }
+    return saved;
   }
 
   private async buildScopeConditions(

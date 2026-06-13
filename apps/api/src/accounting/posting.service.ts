@@ -31,19 +31,27 @@ export interface PostingInput {
 export class PostingService {
   constructor(private readonly dataSource: DataSource) {}
 
-  async post(input: PostingInput): Promise<GLEntry[]> {
+  async post(input: PostingInput, manager_?: EntityManager): Promise<GLEntry[]> {
     const store = tenantStorage.getStore();
     if (!store) throw new Error('PostingService requires a tenant context');
 
     const schema = assertSafeSchemaName(store.schemaName);
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.query(`SET search_path TO "${schema}", public`);
-    await queryRunner.startTransaction();
+    let ownRunner = false;
+    let queryRunner: ReturnType<DataSource['createQueryRunner']> | undefined;
+
+    let manager: EntityManager;
+    if (manager_) {
+      manager = manager_;
+    } else {
+      queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.query(`SET search_path TO "${schema}", public`);
+      await queryRunner.startTransaction();
+      manager = queryRunner.manager;
+      ownRunner = true;
+    }
 
     try {
-      const manager = queryRunner.manager;
-
       // ── Load company for base currency ──
       const company = await manager.getRepository(Company).findOneByOrFail({ id: input.companyId });
 
@@ -148,13 +156,13 @@ export class PostingService {
       }
 
       const saved = await manager.getRepository(GLEntry).save(entries);
-      await queryRunner.commitTransaction();
+      if (ownRunner) await queryRunner!.commitTransaction();
       return saved;
     } catch (err) {
-      await queryRunner.rollbackTransaction();
+      if (ownRunner) await queryRunner!.rollbackTransaction();
       throw err;
     } finally {
-      await queryRunner.release();
+      if (ownRunner) await queryRunner!.release();
     }
   }
 
@@ -200,21 +208,48 @@ export class PostingService {
     return new Date(date).toISOString().slice(0, 10);
   }
 
-  // NOTE: cancel() is idempotent — it checks that no entry has already been
-  // reversed before creating reversal entries. Each reversal links back to its
-  // original via reversalOf.
-  async cancel(original: GLEntry[], input: PostingInput): Promise<GLEntry[]> {
+  /**
+   * Cancel (reverse) a set of GL entries within an optional caller-managed
+   * transaction.  Idempotent at the entry level — a UNIQUE partial index on
+   * `reversal_of` (where NOT NULL) prevents double-reversal in the DB.
+   * Includes the same fiscal-period open check as post().
+   */
+  async cancel(original: GLEntry[], input: PostingInput, manager_?: EntityManager): Promise<GLEntry[]> {
     const store = tenantStorage.getStore();
     if (!store) throw new Error('PostingService requires a tenant context');
 
     const schema = assertSafeSchemaName(store.schemaName);
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.query(`SET search_path TO "${schema}", public`);
-    await queryRunner.startTransaction();
+    let ownRunner = false;
+    let queryRunner: ReturnType<DataSource['createQueryRunner']> | undefined;
+
+    let manager: EntityManager;
+    if (manager_) {
+      manager = manager_;
+    } else {
+      queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.query(`SET search_path TO "${schema}", public`);
+      await queryRunner.startTransaction();
+      manager = queryRunner.manager;
+      ownRunner = true;
+    }
 
     try {
-      const manager = queryRunner.manager;
+      // ── Check fiscal period exists and is open ──
+      const fiscalYear = await manager.getRepository(FiscalYear).findOne({
+        where: {
+          companyId: input.companyId,
+          startDate: LessThanOrEqual(input.postingDate),
+          endDate: MoreThanOrEqual(input.postingDate),
+        },
+      });
+      if (!fiscalYear) {
+        throw new Error(`No open fiscal period for ${this.formatDate(input.postingDate)}`);
+      }
+      if (fiscalYear.isClosed) {
+        throw new Error(`Fiscal period ${fiscalYear.name} is closed`);
+      }
+
       const repo = manager.getRepository(GLEntry);
 
       // Reload originals within the transaction
@@ -231,6 +266,8 @@ export class PostingService {
       const company = await manager.getRepository(Company).findOneByOrFail({ id: input.companyId });
 
       // Build reversal entries (swapped debit/credit)
+      let totalBaseDebitCents = 0;
+      let totalBaseCreditCents = 0;
       const entries: GLEntry[] = [];
       for (const originalEntry of originals) {
         const currency = originalEntry.currency;
@@ -246,6 +283,8 @@ export class PostingService {
         const creditCents = Math.round(Number(originalEntry.debit) * 100);
         const baseDebitCents = Math.round(debitCents * exchangeRate);
         const baseCreditCents = Math.round(creditCents * exchangeRate);
+        totalBaseDebitCents += baseDebitCents;
+        totalBaseCreditCents += baseCreditCents;
 
         const entry = repo.create({
           companyId: input.companyId,
@@ -268,14 +307,21 @@ export class PostingService {
         entries.push(entry);
       }
 
+      // ── Balance check in base currency ──
+      if (totalBaseDebitCents !== totalBaseCreditCents) {
+        throw new Error(
+          `Unbalanced reversal: total base debit (${totalBaseDebitCents / 100}) ≠ total base credit (${totalBaseCreditCents / 100})`,
+        );
+      }
+
       const saved = await repo.save(entries);
-      await queryRunner.commitTransaction();
+      if (ownRunner) await queryRunner!.commitTransaction();
       return saved;
     } catch (err) {
-      await queryRunner.rollbackTransaction();
+      if (ownRunner) await queryRunner!.rollbackTransaction();
       throw err;
     } finally {
-      await queryRunner.release();
+      if (ownRunner) await queryRunner!.release();
     }
   }
 }

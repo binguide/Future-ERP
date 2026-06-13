@@ -18,6 +18,13 @@ import { CostCenter } from './cost-center.entity';
 import { Account } from './account.entity';
 import { GLEntry } from './gl-entry.entity';
 import { TransactionDocument } from './transaction-document.entity';
+import { Workflow } from './workflow.entity';
+import { WorkflowState } from './workflow-state.entity';
+import { WorkflowTransition } from './workflow-transition.entity';
+import { DocVersion } from './doc-version.entity';
+import { ActivityLog } from './activity-log.entity';
+import { Comment } from './comment.entity';
+import { WorkflowAction } from './workflow-action.entity';
 
 export { BaseEntity } from './base.entity';
 export { Tenant } from './tenant.entity';
@@ -41,6 +48,13 @@ export { Account, AccountType } from './account.entity';
 export { GLEntry } from './gl-entry.entity';
 export { TransactionBase } from './transaction-base.entity';
 export { TransactionDocument } from './transaction-document.entity';
+export { DocVersion } from './doc-version.entity';
+export { ActivityLog } from './activity-log.entity';
+export { Comment } from './comment.entity';
+export { Workflow } from './workflow.entity';
+export { WorkflowState } from './workflow-state.entity';
+export { WorkflowTransition } from './workflow-transition.entity';
+export { WorkflowAction } from './workflow-action.entity';
 
 /** Public-schema entities (registered once in the root DataSource). */
 export const publicEntities = [Tenant, Subscription, TenantUser];
@@ -51,6 +65,8 @@ export const tenantEntities = [
   Role, Permission, UserPermission, ApprovalAuthority,
   Company, Branch, Currency, ExchangeRate,
   FiscalYear, CostCenter, Account, GLEntry, TransactionDocument,
+  DocVersion, ActivityLog, Comment,
+  Workflow, WorkflowState, WorkflowTransition, WorkflowAction,
 ];
 
 /** All entities the DataSource must know about. */

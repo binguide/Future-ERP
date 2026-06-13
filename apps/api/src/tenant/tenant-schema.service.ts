@@ -6,6 +6,15 @@ import { assertSafeSchemaName } from './tenant-context';
 
 // SQL migrations run inside a tenant schema after provisioning.
 // Extended as new tenant-scoped entities are introduced.
+const ALL_TENANT_TABLES = [
+  'data_documents', 'doctypes', 'docfields', 'roles', 'permissions',
+  'user_permissions', 'approval_authorities', 'companies', 'branches',
+  'currencies', 'exchange_rates', 'fiscal_years', 'cost_centers', 'accounts',
+  'gl_entries', 'transaction_docs', 'workflows', 'workflow_states',
+  'workflow_transitions', 'workflow_actions', 'doc_versions', 'activity_logs',
+  'comments',
+] as const;
+
 const TENANT_MIGRATIONS: string[] = [
   `
     CREATE TABLE IF NOT EXISTS "users" (
@@ -16,7 +25,9 @@ const TENANT_MIGRATIONS: string[] = [
       role        VARCHAR(20) NOT NULL DEFAULT 'user',
       is_active   BOOLEAN NOT NULL DEFAULT TRUE,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by     uuid,
+      modified_by    uuid
     )
   `,
   `
@@ -31,7 +42,9 @@ const TENANT_MIGRATIONS: string[] = [
       tracking       VARCHAR(20) NOT NULL DEFAULT 'None',
       description    TEXT,
       created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by     uuid,
+      modified_by    uuid
     )
   `,
   `
@@ -49,7 +62,9 @@ const TENANT_MIGRATIONS: string[] = [
       default_value  VARCHAR(255),
       description    TEXT,
       created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by     uuid,
+      modified_by    uuid
     )
   `,
   `
@@ -233,20 +248,162 @@ const TENANT_MIGRATIONS: string[] = [
     ON "gl_entries"(company_id, posting_date)
   `,
   `
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_gl_entries_reversal_of_unique
+    ON "gl_entries"(reversal_of) WHERE reversal_of IS NOT NULL
+  `,
+  `
     CREATE TABLE IF NOT EXISTS "transaction_docs" (
+      id                uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      company_id        uuid NOT NULL REFERENCES "companies"(id),
+      title             VARCHAR(255) NOT NULL,
+      posting_date      DATE NOT NULL,
+      docstatus         SMALLINT NOT NULL DEFAULT 0,
+      submitted_at      TIMESTAMPTZ,
+      submitted_by      uuid,
+      cancelled_at      TIMESTAMPTZ,
+      cancelled_by      uuid,
+      workflow_state_id uuid,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+
+  `
+    CREATE TABLE IF NOT EXISTS "workflows" (
       id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-      company_id    uuid NOT NULL REFERENCES "companies"(id),
-      title         VARCHAR(255) NOT NULL,
-      posting_date  DATE NOT NULL,
-      docstatus     SMALLINT NOT NULL DEFAULT 0,
-      submitted_at  TIMESTAMPTZ,
-      submitted_by  uuid,
-      cancelled_at  TIMESTAMPTZ,
-      cancelled_by  uuid,
+      doctype_id    uuid NOT NULL REFERENCES "doctypes"(id),
+      workflow_name VARCHAR(255) NOT NULL,
+      is_active     BOOLEAN NOT NULL DEFAULT FALSE,
+      condition     TEXT,
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_workflows_doctype_active
+    ON "workflows"(doctype_id, is_active)
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "workflow_states" (
+      id          uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      workflow_id uuid NOT NULL REFERENCES "workflows"(id),
+      state_name  VARCHAR(255) NOT NULL,
+      docstatus   SMALLINT NOT NULL DEFAULT 0,
+      is_editable BOOLEAN NOT NULL DEFAULT TRUE,
+      is_terminal BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(workflow_id, state_name)
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "workflow_transitions" (
+      id            uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      workflow_id   uuid NOT NULL REFERENCES "workflows"(id),
+      from_state_id uuid NOT NULL REFERENCES "workflow_states"(id),
+      to_state_id   uuid NOT NULL REFERENCES "workflow_states"(id),
+      role_id       uuid NOT NULL REFERENCES "roles"(id),
+      condition     TEXT,
+      action        VARCHAR(20) NOT NULL DEFAULT 'Approve',
+      sequence      INTEGER NOT NULL DEFAULT 0,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(workflow_id, from_state_id, to_state_id, role_id)
+    )
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "workflow_actions" (
+      id               uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      doctype_id        uuid NOT NULL REFERENCES "doctypes"(id),
+      reference_doc_id  uuid NOT NULL,
+      from_state_id     uuid,
+      to_state_id       uuid NOT NULL,
+      action            VARCHAR(20) NOT NULL,
+      user_id           uuid NOT NULL,
+      comment           TEXT NOT NULL,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `,
+  `
+    ALTER TABLE "workflow_transitions" ADD COLUMN IF NOT EXISTS action VARCHAR(20) NOT NULL DEFAULT 'Approve'
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_workflow_actions_doc
+    ON "workflow_actions"(doctype_id, reference_doc_id)
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "doc_versions" (
+      id                uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      doctype_id        uuid NOT NULL REFERENCES "doctypes"(id),
+      reference_doc_id  uuid NOT NULL,
+      old_data          JSONB,
+      new_data          JSONB NOT NULL,
+      version_number    INTEGER NOT NULL DEFAULT 1,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by        uuid,
+      modified_by       uuid,
+      UNIQUE(doctype_id, reference_doc_id, version_number)
+    )
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_doc_versions_doc
+    ON "doc_versions"(doctype_id, reference_doc_id)
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "activity_logs" (
+      id                uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      doctype_id        uuid NOT NULL REFERENCES "doctypes"(id),
+      reference_doc_id  uuid NOT NULL,
+      activity_type     VARCHAR(50) NOT NULL,
+      user_id           uuid,
+      message           TEXT,
+      old_value         JSONB,
+      new_value         JSONB,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by        uuid,
+      modified_by       uuid
+    )
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_activity_logs_doc
+    ON "activity_logs"(doctype_id, reference_doc_id)
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS "comments" (
+      id                uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      doctype_id        uuid NOT NULL REFERENCES "doctypes"(id),
+      reference_doc_id  uuid NOT NULL,
+      user_id           uuid,
+      content           TEXT NOT NULL,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_by        uuid,
+      modified_by       uuid
+    )
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS idx_comments_doc
+    ON "comments"(doctype_id, reference_doc_id)
+  `,
+  // System-stamp columns for ALL tenant tables — generated from one list
+  // so every table gets created_by + modified_by without per-table duplication.
+  ...ALL_TENANT_TABLES.flatMap(t => [
+    `ALTER TABLE "${t}" ADD COLUMN IF NOT EXISTS created_by uuid`,
+    `ALTER TABLE "${t}" ADD COLUMN IF NOT EXISTS modified_by uuid`,
+  ]),
+  // Append-only PG triggers for audit tables (DB-level enforcement)
+  `CREATE OR REPLACE FUNCTION reject_audit_modify() RETURNS trigger AS $$
+    BEGIN RAISE EXCEPTION 'audit tables are append-only'; END;
+    $$ LANGUAGE plpgsql`,
+  ...['doc_versions', 'activity_logs', 'comments'].flatMap(t => [
+    `DROP TRIGGER IF EXISTS ${t}_append_only ON "${t}"`,
+    `CREATE TRIGGER ${t}_append_only
+      BEFORE UPDATE OR DELETE ON "${t}"
+      FOR EACH ROW EXECUTE FUNCTION reject_audit_modify()`,
+  ]),
 ];
 
 @Injectable()
